@@ -119,8 +119,8 @@ public class AuthenticationFilter implements GatewayFilter {
     }
 
     private String getUserRole(final String token) {
-        var url = "http://customer-authentication-service:8081/api/cas/users/role";
-        return restTemplate.postForObject(url, token, String.class);
+        var url = "http://customer-authentication-service:8081/api/cas/users/role"; // TODO ISSUE IS HERE
+        return restTemplate.postForObject(url, token, String.class);    // TODO FAILS
     }
 
     private Predicate<String> matchesUrlAndHttpMethod(ServerHttpRequest request, String path) {
