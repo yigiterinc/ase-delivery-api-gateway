@@ -13,7 +13,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 
 import org.springframework.http.server.reactive.ServerHttpRequest;
-import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ServerWebExchange;
@@ -30,7 +29,7 @@ public class AuthenticationFilter implements GatewayFilter {
 
     /* The endpoints in here can be accessed without any permission
      */
-    private final Map<String, ImmutableList<HttpMethod>> PERMISSIONLESS_ENDPOINTS = new HashMap<>(){{
+    private final Map<String, ImmutableList<HttpMethod>> OPEN_ENDPOINTS = new HashMap<>(){{
         put("/login", ImmutableList.of(HttpMethod.POST));
     }};
 
@@ -39,7 +38,7 @@ public class AuthenticationFilter implements GatewayFilter {
      * If a url is not present here nor in the PERMISSIONLESS_ENDPOINTS then
      * It is not accessible from outside and only allowed to be called by other services
      */
-    private final Map<Request, ImmutableList<String>> PERMISSIONED_ENDPOINTS = new HashMap<>(){{
+    private final Map<Request, ImmutableList<String>> RESTRICTED_ENDPOINTS = new HashMap<>(){{
         put(new Request(HttpMethod.GET, Pattern.compile("\\/api\\/cas\\/users\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
         put(new Request(HttpMethod.POST, Pattern.compile("\\/api\\/cas\\/users\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
         put(new Request(HttpMethod.GET, Pattern.compile("\\/api\\/cas\\/users\\/[a-zA-Z0-9]*\\/role")), ImmutableList.of("DISPATCHER"));
@@ -68,54 +67,64 @@ public class AuthenticationFilter implements GatewayFilter {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
         var path = request.getURI().getPath();
-        var allowedEndpoint = PERMISSIONLESS_ENDPOINTS.keySet()
+        var allowedEndpoint = OPEN_ENDPOINTS.keySet()
                 .stream().anyMatch(matchesUrlAndHttpMethod(request, path));
 
         if (allowedEndpoint) {
             return chain.filter(exchange);
         }
 
-        for (Request reqDefinition : PERMISSIONED_ENDPOINTS.keySet()) {
+        for (Request reqDefinition : RESTRICTED_ENDPOINTS.keySet()) {
             if (reqDefinition.getPattern().matcher(path).matches()) {
-                if (!request.getHeaders().containsKey("Authorization")) {
-                    var response = exchange.getResponse();
-                    Map<String, Object> responseData = Maps.newHashMap();
-                    responseData.put("code", 401);
-                    responseData.put("message", "Illegal request");
-                    responseData.put("cause", "Token is empty");
-
-                    try {
-                        ObjectMapper objectMapper = new ObjectMapper();
-                        byte[] data = objectMapper.writeValueAsBytes(responseData);
-
-                        DataBuffer buffer = response.bufferFactory().wrap(data);
-                        response.setStatusCode(HttpStatus.UNAUTHORIZED);
-                        response.getHeaders().add("Content-Type", "application/json;charset=UTF-8");
-                        return response.writeWith(Mono.just(buffer));
-                    } catch (JsonProcessingException e) {
-                        log.error("{}", e);
-                    }
+                if (isAuthMissing(request)) {
+                    Mono<Void> response = respondWithUnauthorized(exchange, "Token is empty");
+                    if (response != null) return response;
                 }
 
+                var authHeader = getAuthHeader(request);
+                var token = authHeader.split(" ")[1];
+                var role = getUserRole(token);
+
+                var allowedRoles = RESTRICTED_ENDPOINTS.get(reqDefinition);
+
+                if (!allowedRoles.contains(role)) {
+                    Mono<Void> response = respondWithUnauthorized(exchange, "Unauthorized");
+                    if (response != null) return response;
+                }
             }
         }
 
         return chain.filter(exchange);
     }
 
-    private String getUserRole(final String userId) {
-        var url = String.format("lb://customer-authentication-service/%s/role", userId);
-        return restTemplate.getForObject(url, String.class);
+    private Mono<Void> respondWithUnauthorized(ServerWebExchange exchange, String cause) {
+        var response = exchange.getResponse();
+        Map<String, Object> responseData = Maps.newHashMap();
+        responseData.put("code", 401);
+        responseData.put("message", "Illegal request");
+        responseData.put("cause", cause);
+
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            byte[] data = objectMapper.writeValueAsBytes(responseData);
+
+            DataBuffer buffer = response.bufferFactory().wrap(data);
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
+            response.getHeaders().add("Content-Type", "application/json;charset=UTF-8");
+            return response.writeWith(Mono.just(buffer));
+        } catch (JsonProcessingException e) {
+            log.error("{}", e);
+        }
+        return null;
+    }
+
+    private String getUserRole(final String token) {
+        var url = "http://customer-authentication-service:8081/api/cas/users/role";
+        return restTemplate.postForObject(url, token, String.class);
     }
 
     private Predicate<String> matchesUrlAndHttpMethod(ServerHttpRequest request, String path) {
-        return url -> path.equals(url) && request.getMethod().equals(PERMISSIONED_ENDPOINTS.get(url));
-    }
-
-    private Mono<Void> onError(ServerWebExchange exchange, String err, HttpStatus httpStatus) {
-        ServerHttpResponse response = exchange.getResponse();
-        response.setStatusCode(httpStatus);
-        return response.setComplete();
+        return url -> path.equals(url) && request.getMethod().equals(RESTRICTED_ENDPOINTS.get(url));
     }
 
     private String getAuthHeader(ServerHttpRequest request) {
