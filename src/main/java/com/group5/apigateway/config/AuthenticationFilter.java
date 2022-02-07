@@ -1,5 +1,7 @@
 package com.group5.apigateway.config;
 
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.interfaces.Claim;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
@@ -30,7 +32,7 @@ public class AuthenticationFilter implements GatewayFilter {
     /* The endpoints in here can be accessed without any permission
      */
     private final Map<String, ImmutableList<HttpMethod>> OPEN_ENDPOINTS = new HashMap<>(){{
-        put("/login", ImmutableList.of(HttpMethod.POST));
+        put("/api/cas/login", ImmutableList.of(HttpMethod.POST));
     }};
 
     /**
@@ -57,10 +59,7 @@ public class AuthenticationFilter implements GatewayFilter {
         put(new Request(HttpMethod.POST, Pattern.compile("\\/api\\/ds\\/deliveries")), ImmutableList.of("DISPATCHER"));
     }};
 
-    private final RestTemplate restTemplate;
-
-    public AuthenticationFilter(RestTemplate restTemplate) {
-        this.restTemplate = restTemplate;
+    public AuthenticationFilter() {
     }
 
     @Override
@@ -82,12 +81,21 @@ public class AuthenticationFilter implements GatewayFilter {
                 }
 
                 var authHeader = getAuthHeader(request);
-                var token = authHeader.split(" ")[1];
-                var role = getUserRole(token);
+                var tokenString = authHeader.split(" ")[1];
+                var token = JWT.decode(tokenString);
 
                 var allowedRoles = RESTRICTED_ENDPOINTS.get(reqDefinition);
+                Map<String, Claim> claims = token.getClaims();
+                var authorities = claims.get("authorities");
 
-                if (!allowedRoles.contains(role)) {
+                if (claims == null) {
+                    Mono<Void> response = respondWithUnauthorized(exchange, "Unauthorized");
+                    if (response != null) return response;
+                }
+
+                var roleInToken = authorities.asString().split("_")[1];    //Key is the Claim name
+
+                if (!allowedRoles.contains(roleInToken)) {
                     Mono<Void> response = respondWithUnauthorized(exchange, "Unauthorized");
                     if (response != null) return response;
                 }
@@ -116,11 +124,6 @@ public class AuthenticationFilter implements GatewayFilter {
             log.error("{}", e);
         }
         return null;
-    }
-
-    private String getUserRole(final String token) {
-        var url = "http://customer-authentication-service:8081/api/cas/users/role"; // TODO ISSUE IS HERE
-        return restTemplate.postForObject(url, token, String.class);    // TODO FAILS
     }
 
     private Predicate<String> matchesUrlAndHttpMethod(ServerHttpRequest request, String path) {

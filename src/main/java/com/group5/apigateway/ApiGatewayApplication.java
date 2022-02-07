@@ -24,13 +24,6 @@ public class ApiGatewayApplication {
     }
 
     @Bean
-    @LoadBalanced
-    public RestTemplate restTemplate() {
-        return new RestTemplate();
-    }
-
-    //route should be added here
-    @Bean
     public RouteLocator routeLocator(RouteLocatorBuilder builder) {
 
         return builder.routes().route(routeSpec ->
