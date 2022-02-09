@@ -33,6 +33,7 @@ public class AuthenticationFilter implements GatewayFilter {
      */
     private final Map<String, ImmutableList<HttpMethod>> OPEN_ENDPOINTS = new HashMap<>(){{
         put("/api/cas/login", ImmutableList.of(HttpMethod.POST));
+        put("/api/cas/users/token/", ImmutableList.of(HttpMethod.GET));
     }};
 
     /**
@@ -48,13 +49,14 @@ public class AuthenticationFilter implements GatewayFilter {
         put(new Request(HttpMethod.POST, Pattern.compile("\\/api\\/ds\\/boxes")), ImmutableList.of("DISPATCHER"));
         put(new Request(HttpMethod.PUT, Pattern.compile("\\/api\\/ds\\/boxes\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
         put(new Request(HttpMethod.DELETE, Pattern.compile("\\/api\\/ds\\/boxes\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
+        put(new Request(HttpMethod.DELETE, Pattern.compile("\\/api\\/ds\\/boxes\\/deliverer\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER", "DELIVERER"));
 
         put(new Request(HttpMethod.PUT, Pattern.compile("\\/api\\/ds\\/collected\\/[a-zA-Z0-9]*\\/deliverer\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
         put(new Request(HttpMethod.PUT, Pattern.compile("\\/api\\/ds\\/deliverer\\/[a-zA-Z0-9]*\\/deposited\\/box\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
         put(new Request(HttpMethod.PUT, Pattern.compile("\\/api\\/ds\\/user\\/[a-zA-Z0-9]*\\/delivered\\/box\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
 
-        put(new Request(HttpMethod.GET, Pattern.compile("\\/api\\/ds\\/customer\\/[a-zA-Z0-9]*\\/status\\/delivered")), ImmutableList.of("DISPATCHER", "CUSTOMER")); // Only the customer with that id
-        put(new Request(HttpMethod.GET, Pattern.compile("\\/api\\/ds\\/customer\\/[a-zA-Z0-9]*\\/status\\/active")), ImmutableList.of("DISPATCHER", "CUSTOMER")); // Only the customer with that id
+        put(new Request(HttpMethod.GET, Pattern.compile("\\/api\\/ds\\/deliveries\\/customer\\/[a-zA-Z0-9]*\\/status\\/delivered")), ImmutableList.of("DISPATCHER", "CUSTOMER")); // Only the customer with that id
+        put(new Request(HttpMethod.GET, Pattern.compile("\\/api\\/ds\\/deliveries\\/customer\\/[a-zA-Z0-9]*\\/status\\/active")), ImmutableList.of("DISPATCHER", "CUSTOMER")); // Only the customer with that id
 
         put(new Request(HttpMethod.POST, Pattern.compile("\\/api\\/ds\\/deliveries")), ImmutableList.of("DISPATCHER"));
     }};
@@ -86,13 +88,13 @@ public class AuthenticationFilter implements GatewayFilter {
 
                 var allowedRoles = RESTRICTED_ENDPOINTS.get(reqDefinition);
                 Map<String, Claim> claims = token.getClaims();
-                var authorities = claims.get("authorities");
 
                 if (claims == null) {
                     Mono<Void> response = respondWithUnauthorized(exchange, "Unauthorized");
                     if (response != null) return response;
                 }
 
+                var authorities = claims.get("authorities");
                 var roleInToken = authorities.asString().split("_")[1];    //Key is the Claim name
 
                 if (!allowedRoles.contains(roleInToken)) {
@@ -127,7 +129,7 @@ public class AuthenticationFilter implements GatewayFilter {
     }
 
     private Predicate<String> matchesUrlAndHttpMethod(ServerHttpRequest request, String path) {
-        return url -> path.equals(url) && request.getMethod().equals(RESTRICTED_ENDPOINTS.get(url));
+        return url -> path.startsWith(url) && request.getMethod().equals(RESTRICTED_ENDPOINTS.get(url));
     }
 
     private String getAuthHeader(ServerHttpRequest request) {
