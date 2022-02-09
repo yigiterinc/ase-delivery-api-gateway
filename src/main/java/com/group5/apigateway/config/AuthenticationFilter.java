@@ -51,7 +51,7 @@ public class AuthenticationFilter implements GatewayFilter {
         put(new Request(HttpMethod.DELETE, Pattern.compile("\\/api\\/ds\\/boxes\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
         put(new Request(HttpMethod.DELETE, Pattern.compile("\\/api\\/ds\\/boxes\\/deliverer\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER", "DELIVERER"));
 
-        put(new Request(HttpMethod.PUT, Pattern.compile("\\/api\\/ds\\/collected\\/[a-zA-Z0-9]*\\/deliverer\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
+        put(new Request(HttpMethod.PUT, Pattern.compile("\\/api\\/ds\\/box\\/[a-zA-Z0-9]*\\/collected\\/[a-zA-Z0-9]*\\/deliverer\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
         put(new Request(HttpMethod.PUT, Pattern.compile("\\/api\\/ds\\/deliverer\\/[a-zA-Z0-9]*\\/deposited\\/box\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
         put(new Request(HttpMethod.PUT, Pattern.compile("\\/api\\/ds\\/user\\/[a-zA-Z0-9]*\\/delivered\\/box\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
 
