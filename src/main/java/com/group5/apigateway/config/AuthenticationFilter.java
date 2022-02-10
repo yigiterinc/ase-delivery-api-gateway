@@ -45,6 +45,7 @@ public class AuthenticationFilter implements GatewayFilter {
         put(new Request(HttpMethod.GET, Pattern.compile("\\/api\\/cas\\/users\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
         put(new Request(HttpMethod.POST, Pattern.compile("\\/api\\/cas\\/users")), ImmutableList.of("DISPATCHER"));
         put(new Request(HttpMethod.GET, Pattern.compile("\\/api\\/cas\\/users\\/[a-zA-Z0-9]*\\/role")), ImmutableList.of("DISPATCHER"));
+        put(new Request(HttpMethod.DELETE, Pattern.compile("\\/api\\/cas\\/users\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
 
         put(new Request(HttpMethod.POST, Pattern.compile("\\/api\\/ds\\/boxes")), ImmutableList.of("DISPATCHER"));
         put(new Request(HttpMethod.PUT, Pattern.compile("\\/api\\/ds\\/boxes\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
@@ -59,6 +60,7 @@ public class AuthenticationFilter implements GatewayFilter {
         put(new Request(HttpMethod.GET, Pattern.compile("\\/api\\/ds\\/deliveries\\/customer\\/[a-zA-Z0-9]*\\/status\\/active")), ImmutableList.of("DISPATCHER", "CUSTOMER")); // Only the customer with that id
 
         put(new Request(HttpMethod.POST, Pattern.compile("\\/api\\/ds\\/deliveries")), ImmutableList.of("DISPATCHER"));
+        put(new Request(HttpMethod.DELETE, Pattern.compile("\\/api\\/ds\\/deliveries\\/[a-zA-Z0-9]*")), ImmutableList.of("DISPATCHER"));
     }};
 
     public AuthenticationFilter() {
